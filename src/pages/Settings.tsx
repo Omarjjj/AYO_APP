@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { motion } from 'framer-motion'
 import { 
   Server,
@@ -9,7 +9,10 @@ import {
   X,
   RefreshCw,
   Trash2,
-  Zap
+  Zap,
+  Mic,
+  Volume2,
+  MicOff,
 } from 'lucide-react'
 import Card from '../components/ui/Card'
 import Toggle from '../components/ui/Toggle'
@@ -71,6 +74,123 @@ export default function Settings() {
   const { settings, updateSettings, clearLogs } = useStore()
   const [testingConnection, setTestingConnection] = useState(false)
   const [connectionStatus, setConnectionStatus] = useState<'idle' | 'success' | 'error'>('idle')
+
+  // Audio device state (uses browser MediaDevices API directly)
+  const [inputDevices, setInputDevices] = useState<MediaDeviceInfo[]>([])
+  const [outputDevices, setOutputDevices] = useState<MediaDeviceInfo[]>([])
+  const [selectedInput, setSelectedInput] = useState<string>(settings.selectedInputDevice?.toString() ?? '')
+  const [selectedOutput, setSelectedOutput] = useState<string>(settings.selectedOutputDevice ?? '')
+  const [loadingDevices, setLoadingDevices] = useState(false)
+
+  // Mic test state (uses browser getUserMedia directly — no Python needed)
+  const [micTesting, setMicTesting] = useState(false)
+  const [micLevel, setMicLevel] = useState(0)
+  const micStreamRef = useRef<MediaStream | null>(null)
+  const analyserCleanupRef = useRef<(() => void) | null>(null)
+
+  const loadAudioDevices = useCallback(async () => {
+    setLoadingDevices(true)
+    try {
+      // Request mic permission so browser reveals full device labels
+      const tempStream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      tempStream.getTracks().forEach(t => t.stop())
+
+      const all = await navigator.mediaDevices.enumerateDevices()
+      setInputDevices(all.filter(d => d.kind === 'audioinput'))
+      setOutputDevices(all.filter(d => d.kind === 'audiooutput'))
+    } catch (err) {
+      console.error('Failed to enumerate audio devices:', err)
+    } finally {
+      setLoadingDevices(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    loadAudioDevices()
+  }, [loadAudioDevices])
+
+  // Cleanup mic test on unmount
+  useEffect(() => {
+    return () => {
+      stopMicTest()
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  const handleInputDeviceChange = (deviceId: string) => {
+    setSelectedInput(deviceId)
+    // Also tell the Python wake word process to switch (if connected)
+    const api = window.electronAPI
+    if (api?.setInputDevice) {
+      // Python uses numeric index; browser uses deviceId string.
+      // For now store the deviceId; Python integration happens via IPC separately.
+      const idx = deviceId ? parseInt(deviceId) : null
+      api.setInputDevice(isNaN(idx as number) ? null : idx).catch(() => {})
+    }
+    updateSettings({ selectedInputDevice: deviceId ? parseInt(deviceId) || null : null })
+  }
+
+  const handleOutputDeviceChange = (deviceId: string) => {
+    setSelectedOutput(deviceId)
+    updateSettings({ selectedOutputDevice: deviceId || null })
+  }
+
+  const startMicTest = async () => {
+    setMicTesting(true)
+    setMicLevel(0)
+
+    try {
+      const constraints: MediaStreamConstraints = {
+        audio: selectedInput ? { deviceId: { exact: selectedInput } } : true,
+      }
+      const stream = await navigator.mediaDevices.getUserMedia(constraints)
+      micStreamRef.current = stream
+
+      const audioCtx = new AudioContext()
+      const source = audioCtx.createMediaStreamSource(stream)
+      const analyser = audioCtx.createAnalyser()
+      analyser.fftSize = 512
+      source.connect(analyser)
+
+      // Also play back through speakers so user hears themselves
+      const destination = audioCtx.destination
+      source.connect(destination)
+
+      const dataArray = new Uint8Array(analyser.frequencyBinCount)
+
+      let animFrameId: number
+      const updateLevel = () => {
+        analyser.getByteFrequencyData(dataArray)
+        let sum = 0
+        for (let i = 0; i < dataArray.length; i++) sum += dataArray[i]
+        const avg = sum / dataArray.length
+        setMicLevel(Math.min(avg / 128, 1))
+        animFrameId = requestAnimationFrame(updateLevel)
+      }
+      updateLevel()
+
+      analyserCleanupRef.current = () => {
+        cancelAnimationFrame(animFrameId)
+        source.disconnect()
+        analyser.disconnect()
+        audioCtx.close()
+        stream.getTracks().forEach(t => t.stop())
+        micStreamRef.current = null
+        setMicTesting(false)
+        setMicLevel(0)
+      }
+    } catch (err) {
+      console.error('Mic test failed:', err)
+      setMicTesting(false)
+    }
+  }
+
+  const stopMicTest = () => {
+    if (analyserCleanupRef.current) {
+      analyserCleanupRef.current()
+      analyserCleanupRef.current = null
+    }
+  }
 
   const handleTestConnection = async () => {
     setTestingConnection(true)
@@ -168,6 +288,114 @@ export default function Settings() {
               >
                 Clear Data
               </Button>
+            </div>
+          </SettingSection>
+        </motion.div>
+
+        {/* Audio Devices */}
+        <motion.div variants={itemVariants} className="col-span-2">
+          <SettingSection title="Audio Devices" icon={<Mic className="w-4 h-4 text-ayo-purple" strokeWidth={1.5} />}>
+            <div className="grid grid-cols-2 gap-6">
+              {/* Input (Microphone) */}
+              <div className="space-y-3">
+                <div className="flex items-center gap-2 mb-2">
+                  <Mic className="w-3.5 h-3.5 text-ayo-muted" strokeWidth={1.5} />
+                  <p className="text-xs text-ayo-muted uppercase tracking-wider">Microphone (Input)</p>
+                </div>
+
+                <select
+                  value={selectedInput}
+                  onChange={(e) => handleInputDeviceChange(e.target.value)}
+                  disabled={loadingDevices}
+                  className="w-full px-3 py-2 rounded-lg text-xs text-ayo-silver disabled:opacity-50"
+                >
+                  <option value="">System Default</option>
+                  {inputDevices.map((dev) => (
+                    <option key={dev.deviceId} value={dev.deviceId}>
+                      {dev.label || `Microphone (${dev.deviceId.slice(0, 8)})`}
+                    </option>
+                  ))}
+                </select>
+
+                {/* Mic Level Meter */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <p className="text-[10px] text-ayo-muted">Mic Level</p>
+                    {micTesting && (
+                      <p className="text-[10px] text-ayo-purple animate-pulse">Listening... speak to test</p>
+                    )}
+                  </div>
+                  <div className="w-full h-2 bg-ayo-bg-dark rounded-full overflow-hidden border border-ayo-border/30">
+                    <motion.div
+                      className={cn(
+                        "h-full rounded-full transition-colors duration-150",
+                        micLevel > 0.7 ? "bg-ayo-error" : micLevel > 0.3 ? "bg-ayo-warning" : "bg-ayo-success"
+                      )}
+                      animate={{ width: `${micLevel * 100}%` }}
+                      transition={{ duration: 0.1 }}
+                    />
+                  </div>
+                </div>
+
+                {/* Test Mic Button */}
+                <div className="flex gap-2">
+                  {!micTesting ? (
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      icon={<Mic className="w-3.5 h-3.5" />}
+                      onClick={startMicTest}
+                      disabled={loadingDevices}
+                    >
+                      Test Microphone
+                    </Button>
+                  ) : (
+                    <Button
+                      variant="danger"
+                      size="sm"
+                      icon={<MicOff className="w-3.5 h-3.5" />}
+                      onClick={stopMicTest}
+                    >
+                      Stop Test
+                    </Button>
+                  )}
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    icon={<RefreshCw className={cn("w-3.5 h-3.5", loadingDevices && "animate-spin")} />}
+                    onClick={loadAudioDevices}
+                    disabled={loadingDevices}
+                  >
+                    Refresh
+                  </Button>
+                </div>
+              </div>
+
+              {/* Output (Speakers) */}
+              <div className="space-y-3">
+                <div className="flex items-center gap-2 mb-2">
+                  <Volume2 className="w-3.5 h-3.5 text-ayo-muted" strokeWidth={1.5} />
+                  <p className="text-xs text-ayo-muted uppercase tracking-wider">Speaker (Output)</p>
+                </div>
+
+                <select
+                  value={selectedOutput}
+                  onChange={(e) => handleOutputDeviceChange(e.target.value)}
+                  disabled={loadingDevices}
+                  className="w-full px-3 py-2 rounded-lg text-xs text-ayo-silver disabled:opacity-50"
+                >
+                  <option value="">System Default</option>
+                  {outputDevices.map((dev) => (
+                    <option key={dev.deviceId} value={dev.deviceId}>
+                      {dev.label || `Speaker (${dev.deviceId.slice(0, 8)})`}
+                    </option>
+                  ))}
+                </select>
+
+                <p className="text-[10px] text-ayo-muted mt-1">
+                  Used for AYO's voice responses (TTS playback)
+                </p>
+              </div>
             </div>
           </SettingSection>
         </motion.div>
