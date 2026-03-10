@@ -27,6 +27,12 @@ export function useWakeWord() {
       console.log('[useWakeWord] Status:', data.status)
       if (data.status === 'listening' || data.status === 'stopped' || data.status === 'disconnected') {
         setWakeWordStatus(data.status)
+        if (data.status === 'listening') {
+          const savedDevice = useStore.getState().settings.selectedInputDevice
+          if (savedDevice != null && api.setInputDevice) {
+            api.setInputDevice(savedDevice).catch(() => {})
+          }
+        }
       }
     })
 

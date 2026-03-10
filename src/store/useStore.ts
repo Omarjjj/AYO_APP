@@ -1,5 +1,27 @@
 import { create } from 'zustand'
 
+const SELECTED_INPUT_DEVICE_KEY = 'ayo-selectedInputDevice'
+
+function getStoredInputDevice(): number | null {
+  if (typeof localStorage === 'undefined') return null
+  try {
+    const s = localStorage.getItem(SELECTED_INPUT_DEVICE_KEY)
+    if (s == null || s === '') return null
+    const n = parseInt(s, 10)
+    return Number.isNaN(n) ? null : n
+  } catch {
+    return null
+  }
+}
+
+function setStoredInputDevice(value: number | null) {
+  if (typeof localStorage === 'undefined') return
+  try {
+    if (value == null) localStorage.removeItem(SELECTED_INPUT_DEVICE_KEY)
+    else localStorage.setItem(SELECTED_INPUT_DEVICE_KEY, String(value))
+  } catch { /* ignore */ }
+}
+
 export type AssistantStatus = 'idle' | 'listening' | 'processing' | 'responding'
 export type ConnectionStatus = 'online' | 'offline' | 'connecting'
 
@@ -132,7 +154,7 @@ export const useStore = create<AppState>((set) => ({
     { id: '3', type: 'ai', message: 'AI model initialized', timestamp: new Date() },
   ],
   
-  // Default Settings
+  // Default Settings (selectedInputDevice persisted to localStorage)
   settings: {
     serverUrl: 'https://localhost:8443',
     proactivityLevel: 'medium',
@@ -141,7 +163,7 @@ export const useStore = create<AppState>((set) => ({
     enableCameraAccess: false,
     enableContextCapture: true,
     dataRetention: false,
-    selectedInputDevice: null,
+    selectedInputDevice: getStoredInputDevice(),
     selectedOutputDevice: null,
     hotkeys: {
       privacyMode: 'Ctrl+Shift+P',
@@ -233,9 +255,12 @@ export const useStore = create<AppState>((set) => ({
     }]
   })),
   
-  updateSettings: (newSettings) => set((state) => ({
-    settings: { ...state.settings, ...newSettings }
-  })),
+  updateSettings: (newSettings) => set((state) => {
+    if (newSettings.selectedInputDevice !== undefined) {
+      setStoredInputDevice(newSettings.selectedInputDevice)
+    }
+    return { settings: { ...state.settings, ...newSettings } }
+  }),
   
   updateSystemInfo: (info) => set((state) => ({
     cpuUsage: info.cpuUsage ?? state.cpuUsage,
