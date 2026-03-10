@@ -18,6 +18,7 @@ import Card from '../components/ui/Card'
 import Toggle from '../components/ui/Toggle'
 import Button from '../components/ui/Button'
 import { useStore } from '../store/useStore'
+import type { AudioDevice } from '../store/useStore'
 import { cn } from '../lib/utils'
 
 const containerVariants = {
@@ -71,32 +72,44 @@ function SettingRow({ label, description, children }: SettingRowProps) {
 }
 
 export default function Settings() {
-  const { settings, updateSettings, clearLogs } = useStore()
+  const { settings, updateSettings, clearLogs, wakeWordStatus } = useStore()
   const [testingConnection, setTestingConnection] = useState(false)
   const [connectionStatus, setConnectionStatus] = useState<'idle' | 'success' | 'error'>('idle')
 
-  // Audio device state (uses browser MediaDevices API directly)
-  const [inputDevices, setInputDevices] = useState<MediaDeviceInfo[]>([])
+  // Input devices from Python (sounddevice indices); output from browser
+  const [inputDevices, setInputDevices] = useState<AudioDevice[]>([])
   const [outputDevices, setOutputDevices] = useState<MediaDeviceInfo[]>([])
-  const [selectedInput, setSelectedInput] = useState<string>(settings.selectedInputDevice?.toString() ?? '')
+  const [selectedInput, setSelectedInput] = useState<string>(settings.selectedInputDevice != null ? String(settings.selectedInputDevice) : '')
   const [selectedOutput, setSelectedOutput] = useState<string>(settings.selectedOutputDevice ?? '')
   const [loadingDevices, setLoadingDevices] = useState(false)
 
-  // Mic test state (uses browser getUserMedia directly — no Python needed)
+  // Mic test state: Python-driven (same device as wake-word detection)
   const [micTesting, setMicTesting] = useState(false)
   const [micLevel, setMicLevel] = useState(0)
-  const micStreamRef = useRef<MediaStream | null>(null)
-  const analyserCleanupRef = useRef<(() => void) | null>(null)
+  const micTestLevelIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const micTestUnsubscribeRef = useRef<(() => void) | null>(null)
+  const micTestAudioCtxRef = useRef<AudioContext | null>(null)
 
   const loadAudioDevices = useCallback(async () => {
     setLoadingDevices(true)
     try {
-      // Request mic permission so browser reveals full device labels
+      const api = window.electronAPI
+      if (api?.listAudioDevices) {
+        const result = await api.listAudioDevices()
+        const inputs = result?.input ?? []
+        setInputDevices(inputs)
+        
+        // Update selected input if it's empty, or if the current selection is invalid
+        setSelectedInput(prev => {
+          if (prev === '' && result?.currentDevice != null) {
+            return String(result.currentDevice)
+          }
+          return prev
+        })
+      }
       const tempStream = await navigator.mediaDevices.getUserMedia({ audio: true })
       tempStream.getTracks().forEach(t => t.stop())
-
       const all = await navigator.mediaDevices.enumerateDevices()
-      setInputDevices(all.filter(d => d.kind === 'audioinput'))
       setOutputDevices(all.filter(d => d.kind === 'audiooutput'))
     } catch (err) {
       console.error('Failed to enumerate audio devices:', err)
@@ -109,7 +122,17 @@ export default function Settings() {
     loadAudioDevices()
   }, [loadAudioDevices])
 
-  // Cleanup mic test on unmount
+  // Reload input devices when Python WebSocket connects (status becomes "listening")
+  useEffect(() => {
+    if (wakeWordStatus === 'listening') {
+      loadAudioDevices()
+    }
+  }, [wakeWordStatus, loadAudioDevices])
+
+  useEffect(() => {
+    setSelectedInput(settings.selectedInputDevice != null ? String(settings.selectedInputDevice) : '')
+  }, [settings.selectedInputDevice])
+
   useEffect(() => {
     return () => {
       stopMicTest()
@@ -117,17 +140,15 @@ export default function Settings() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  const handleInputDeviceChange = (deviceId: string) => {
-    setSelectedInput(deviceId)
-    // Also tell the Python wake word process to switch (if connected)
+  const handleInputDeviceChange = (value: string) => {
+    setSelectedInput(value)
+    const idx = value === '' ? null : parseInt(value, 10)
+    const deviceIndex = idx !== null && !isNaN(idx) ? idx : null
     const api = window.electronAPI
     if (api?.setInputDevice) {
-      // Python uses numeric index; browser uses deviceId string.
-      // For now store the deviceId; Python integration happens via IPC separately.
-      const idx = deviceId ? parseInt(deviceId) : null
-      api.setInputDevice(isNaN(idx as number) ? null : idx).catch(() => {})
+      api.setInputDevice(deviceIndex).catch(() => {})
     }
-    updateSettings({ selectedInputDevice: deviceId ? parseInt(deviceId) || null : null })
+    updateSettings({ selectedInputDevice: deviceIndex })
   }
 
   const handleOutputDeviceChange = (deviceId: string) => {
@@ -136,60 +157,85 @@ export default function Settings() {
   }
 
   const startMicTest = async () => {
+    const api = window.electronAPI
+    if (!api?.startMicTest || !api?.onMicTestAudio) {
+      setMicTesting(false)
+      return
+    }
     setMicTesting(true)
     setMicLevel(0)
 
-    try {
-      const constraints: MediaStreamConstraints = {
-        audio: selectedInput ? { deviceId: { exact: selectedInput } } : true,
+    let lastLevel = 0
+    const decay = 0.92
+
+    const audioCtx = new AudioContext()
+    micTestAudioCtxRef.current = audioCtx
+
+    const unsubscribe = api.onMicTestAudio((data: { audio: string; sampleRate: number }) => {
+      try {
+        const binary = atob(data.audio)
+        const bytes = new Uint8Array(binary.length)
+        for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
+        const view = new DataView(bytes.buffer)
+        const numSamples = Math.floor(bytes.length / 2)
+
+        let sumSq = 0
+        const float32 = new Float32Array(numSamples)
+        for (let i = 0; i < numSamples; i++) {
+          const s = view.getInt16(i * 2, true)
+          const f = s / 32768
+          float32[i] = f
+          sumSq += s * s
+        }
+        const rms = numSamples > 0 ? Math.sqrt(sumSq / numSamples) / 32768 : 0
+        lastLevel = Math.min(rms * 2.5, 1)
+
+        // Play audio through speakers
+        if (audioCtx.state === 'running' && numSamples > 0) {
+          const sampleRate = data.sampleRate || 16000
+          const buffer = audioCtx.createBuffer(1, numSamples, sampleRate)
+          buffer.getChannelData(0).set(float32)
+          const source = audioCtx.createBufferSource()
+          source.buffer = buffer
+          source.connect(audioCtx.destination)
+          source.start()
+        }
+      } catch {
+        // ignore decode errors
       }
-      const stream = await navigator.mediaDevices.getUserMedia(constraints)
-      micStreamRef.current = stream
+    })
 
-      const audioCtx = new AudioContext()
-      const source = audioCtx.createMediaStreamSource(stream)
-      const analyser = audioCtx.createAnalyser()
-      analyser.fftSize = 512
-      source.connect(analyser)
-
-      // Also play back through speakers so user hears themselves
-      const destination = audioCtx.destination
-      source.connect(destination)
-
-      const dataArray = new Uint8Array(analyser.frequencyBinCount)
-
-      let animFrameId: number
-      const updateLevel = () => {
-        analyser.getByteFrequencyData(dataArray)
-        let sum = 0
-        for (let i = 0; i < dataArray.length; i++) sum += dataArray[i]
-        const avg = sum / dataArray.length
-        setMicLevel(Math.min(avg / 128, 1))
-        animFrameId = requestAnimationFrame(updateLevel)
-      }
-      updateLevel()
-
-      analyserCleanupRef.current = () => {
-        cancelAnimationFrame(animFrameId)
-        source.disconnect()
-        analyser.disconnect()
-        audioCtx.close()
-        stream.getTracks().forEach(t => t.stop())
-        micStreamRef.current = null
-        setMicTesting(false)
-        setMicLevel(0)
-      }
-    } catch (err) {
-      console.error('Mic test failed:', err)
+    micTestUnsubscribeRef.current = unsubscribe
+    const ok = await api.startMicTest()
+    if (!ok) {
       setMicTesting(false)
+      unsubscribe()
+      audioCtx.close()
+      micTestAudioCtxRef.current = null
+      return
     }
+
+    micTestLevelIntervalRef.current = setInterval(() => {
+      setMicLevel(prev => prev * decay + lastLevel * (1 - decay))
+    }, 80)
   }
 
   const stopMicTest = () => {
-    if (analyserCleanupRef.current) {
-      analyserCleanupRef.current()
-      analyserCleanupRef.current = null
+    if (micTestLevelIntervalRef.current) {
+      clearInterval(micTestLevelIntervalRef.current)
+      micTestLevelIntervalRef.current = null
     }
+    if (micTestUnsubscribeRef.current) {
+      micTestUnsubscribeRef.current()
+      micTestUnsubscribeRef.current = null
+    }
+    if (micTestAudioCtxRef.current) {
+      micTestAudioCtxRef.current.close()
+      micTestAudioCtxRef.current = null
+    }
+    window.electronAPI?.stopMicTest?.()
+    setMicLevel(0)
+    setMicTesting(false)
   }
 
   const handleTestConnection = async () => {
@@ -311,8 +357,8 @@ export default function Settings() {
                 >
                   <option value="">System Default</option>
                   {inputDevices.map((dev) => (
-                    <option key={dev.deviceId} value={dev.deviceId}>
-                      {dev.label || `Microphone (${dev.deviceId.slice(0, 8)})`}
+                    <option key={`input-${dev.index}`} value={String(dev.index)}>
+                      {dev.name}{dev.isDefault ? ' (Default)' : ''}
                     </option>
                   ))}
                 </select>
