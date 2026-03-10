@@ -46,8 +46,11 @@ export default function Dashboard() {
     toggleCamera,
     toggleContextCapture,
     serverLatency,
-    lastInteractionTime
+    lastInteractionTime,
+    wakeWordStatus,
   } = useStore()
+
+  const isAyoDetected = wakeWordStatus === 'detected'
 
   // GSAP floating animation for orb
   useEffect(() => {
@@ -84,23 +87,65 @@ export default function Dashboard() {
       >
         {/* Floating Orb */}
         <div ref={orbRef} className="relative mb-8">
-          {/* Outer glow ring */}
-          <div className="absolute inset-0 rounded-full bg-ayo-purple/20 blur-3xl scale-150" />
+          {/* Outer glow ring — intensifies on AYO detection */}
+          <motion.div
+            animate={{
+              scale: isAyoDetected ? 2 : 1.5,
+              opacity: isAyoDetected ? 1 : 0.6,
+            }}
+            transition={{ duration: 0.4 }}
+            className="absolute inset-0 rounded-full bg-ayo-purple/20 blur-3xl"
+          />
           
           {/* Main orb */}
           <motion.div
             animate={{ 
-              boxShadow: assistantStatus !== 'idle' 
-                ? ['0 0 40px rgba(157,140,255,0.3)', '0 0 60px rgba(157,140,255,0.5)', '0 0 40px rgba(157,140,255,0.3)']
-                : '0 0 30px rgba(157,140,255,0.2)'
+              boxShadow: isAyoDetected
+                ? ['0 0 60px rgba(157,140,255,0.6)', '0 0 90px rgba(157,140,255,0.9)', '0 0 60px rgba(157,140,255,0.6)']
+                : assistantStatus !== 'idle' 
+                  ? ['0 0 40px rgba(157,140,255,0.3)', '0 0 60px rgba(157,140,255,0.5)', '0 0 40px rgba(157,140,255,0.3)']
+                  : '0 0 30px rgba(157,140,255,0.2)',
+              scale: isAyoDetected ? 1.15 : 1,
             }}
-            transition={{ duration: 2, repeat: Infinity }}
-            className="relative w-24 h-24 rounded-full bg-gradient-to-br from-ayo-purple/30 to-ayo-purple-dark/30 border border-ayo-purple/30 flex items-center justify-center"
+            transition={{ duration: isAyoDetected ? 0.6 : 2, repeat: Infinity }}
+            className={cn(
+              "relative w-24 h-24 rounded-full border flex items-center justify-center transition-colors duration-300",
+              isAyoDetected
+                ? "bg-gradient-to-br from-ayo-purple/50 to-ayo-purple-dark/50 border-ayo-purple/60"
+                : "bg-gradient-to-br from-ayo-purple/30 to-ayo-purple-dark/30 border-ayo-purple/30"
+            )}
           >
-            <Sparkles className="w-10 h-10 text-ayo-purple" strokeWidth={1.5} />
+            <Sparkles className={cn(
+              "w-10 h-10 transition-colors duration-300",
+              isAyoDetected ? "text-white" : "text-ayo-purple"
+            )} strokeWidth={1.5} />
             
+            {/* Detection pulse rings */}
+            {isAyoDetected && (
+              <>
+                <motion.div
+                  initial={{ scale: 1, opacity: 0.7 }}
+                  animate={{ scale: 2, opacity: 0 }}
+                  transition={{ duration: 1, repeat: Infinity }}
+                  className="absolute inset-0 rounded-full border-2 border-ayo-purple"
+                />
+                <motion.div
+                  initial={{ scale: 1, opacity: 0.7 }}
+                  animate={{ scale: 2, opacity: 0 }}
+                  transition={{ duration: 1, repeat: Infinity, delay: 0.3 }}
+                  className="absolute inset-0 rounded-full border-2 border-ayo-purple"
+                />
+                <motion.div
+                  initial={{ scale: 1, opacity: 0.7 }}
+                  animate={{ scale: 2, opacity: 0 }}
+                  transition={{ duration: 1, repeat: Infinity, delay: 0.6 }}
+                  className="absolute inset-0 rounded-full border-2 border-ayo-purple"
+                />
+              </>
+            )}
+
             {/* Processing rings */}
-            {assistantStatus === 'processing' && (
+            {assistantStatus === 'processing' && !isAyoDetected && (
               <>
                 <motion.div
                   initial={{ scale: 1, opacity: 0.5 }}
@@ -121,12 +166,21 @@ export default function Dashboard() {
 
         {/* Status Text */}
         <motion.div 
-          key={assistantStatus}
+          key={isAyoDetected ? 'detected' : assistantStatus}
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           className="text-center mb-6"
         >
-          <p className="text-ayo-silver text-sm uppercase tracking-widest">{assistantStatus}</p>
+          {isAyoDetected ? (
+            <>
+              <p className="text-ayo-purple text-sm font-medium uppercase tracking-widest">AYO detected!</p>
+              <p className="text-ayo-muted text-xs mt-1">Listening for your request...</p>
+            </>
+          ) : (
+            <p className="text-ayo-silver text-sm uppercase tracking-widest">
+              {wakeWordStatus === 'listening' ? 'listening for "AYO"' : assistantStatus}
+            </p>
+          )}
         </motion.div>
 
         {/* Quick Action */}

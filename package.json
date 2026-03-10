@@ -2,29 +2,30 @@
   "name": "ayo",
   "version": "1.0.0",
   "description": "AI Copilot Assistant - Your Private Desktop AI Companion",
-  "type": "module",
   "main": "dist-electron/main.js",
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build && electron-builder",
     "preview": "vite preview",
-    "electron:dev": "concurrently \"vite\" \"wait-on http://localhost:5173 && electron .\"",
+    "electron:dev": "vite",
     "electron:build": "vite build && electron-builder"
   },
   "dependencies": {
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0",
-    "react-router-dom": "^6.22.0",
+    "clsx": "^2.1.0",
     "framer-motion": "^11.0.3",
     "gsap": "^3.12.5",
     "lucide-react": "^0.323.0",
-    "zustand": "^4.5.0",
-    "clsx": "^2.1.0",
-    "tailwind-merge": "^2.2.1"
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-router-dom": "^6.22.0",
+    "tailwind-merge": "^2.2.1",
+    "ws": "^8.19.0",
+    "zustand": "^4.5.0"
   },
   "devDependencies": {
     "@types/react": "^18.2.55",
     "@types/react-dom": "^18.2.19",
+    "@types/ws": "^8.18.1",
     "@vitejs/plugin-react": "^4.2.1",
     "autoprefixer": "^10.4.17",
     "concurrently": "^8.2.2",

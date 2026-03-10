@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    width: 100vw;
+    height: 100vh;
+    overflow: hidden;
+    background: transparent;
+  }
+
+  .overlay {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    opacity: 0;
+    z-index: 99999;
+  }
+
+  .overlay.active {
+    opacity: 1;
+    transition: opacity 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  .overlay.fade-out {
+    opacity: 0;
+    transition: opacity 1.6s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  /* ── Soft ambient vignette ─────────────────────────────────────── */
+  .vignette {
+    position: absolute;
+    inset: 0;
+    box-shadow:
+      inset 0 0 120px 30px rgba(130, 110, 255, 0.06),
+      inset 0 0 250px 60px rgba(130, 110, 255, 0.03);
+  }
+
+  /* ── Edge glow layers ──────────────────────────────────────────── */
+  .edge {
+    position: absolute;
+  }
+
+  .edge.top    { top: 0;    left: 0;   right: 0;  height: 2px; }
+  .edge.bottom { bottom: 0; left: 0;   right: 0;  height: 2px; }
+  .edge.left   { top: 0;    bottom: 0; left: 0;   width: 2px;  }
+  .edge.right  { top: 0;    bottom: 0; right: 0;  width: 2px;  }
+
+  .edge.top, .edge.bottom {
+    background: linear-gradient(90deg,
+      transparent 0%,
+      rgba(157, 140, 255, 0.5) 15%,
+      rgba(180, 165, 255, 0.9) 50%,
+      rgba(157, 140, 255, 0.5) 85%,
+      transparent 100%
+    );
+  }
+
+  .edge.left, .edge.right {
+    background: linear-gradient(180deg,
+      transparent 0%,
+      rgba(157, 140, 255, 0.5) 15%,
+      rgba(180, 165, 255, 0.9) 50%,
+      rgba(157, 140, 255, 0.5) 85%,
+      transparent 100%
+    );
+  }
+
+  /* Soft spread behind each edge */
+  .edge.top    { box-shadow: 0  2px 30px 8px rgba(140, 120, 255, 0.35), 0  1px 80px 20px rgba(140, 120, 255, 0.12); }
+  .edge.bottom { box-shadow: 0 -2px 30px 8px rgba(140, 120, 255, 0.35), 0 -1px 80px 20px rgba(140, 120, 255, 0.12); }
+  .edge.left   { box-shadow:  2px 0 30px 8px rgba(140, 120, 255, 0.35),  1px 0 80px 20px rgba(140, 120, 255, 0.12); }
+  .edge.right  { box-shadow: -2px 0 30px 8px rgba(140, 120, 255, 0.35), -1px 0 80px 20px rgba(140, 120, 255, 0.12); }
+
+  /* ── Traveling light sweep ─────────────────────────────────────── */
+  .sweep {
+    position: absolute;
+    border-radius: 50%;
+    filter: blur(2px);
+  }
+
+  .sweep.horizontal {
+    height: 4px;
+    width: 220px;
+    background: radial-gradient(ellipse at center,
+      rgba(220, 210, 255, 1) 0%,
+      rgba(180, 165, 255, 0.8) 30%,
+      rgba(140, 120, 255, 0.3) 60%,
+      transparent 100%
+    );
+    box-shadow:
+      0 0 20px 6px rgba(180, 165, 255, 0.6),
+      0 0 50px 15px rgba(140, 120, 255, 0.25);
+  }
+
+  .sweep.vertical {
+    width: 4px;
+    height: 220px;
+    background: radial-gradient(ellipse at center,
+      rgba(220, 210, 255, 1) 0%,
+      rgba(180, 165, 255, 0.8) 30%,
+      rgba(140, 120, 255, 0.3) 60%,
+      transparent 100%
+    );
+    box-shadow:
+      0 0 20px 6px rgba(180, 165, 255, 0.6),
+      0 0 50px 15px rgba(140, 120, 255, 0.25);
+  }
+
+  .sweep.top    { top: -1px; }
+  .sweep.bottom { bottom: -1px; }
+  .sweep.left   { left: -1px; }
+  .sweep.right  { right: -1px; }
+
+  .overlay.active .sweep.top {
+    animation: sweepH 2.4s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  }
+  .overlay.active .sweep.bottom {
+    animation: sweepH 2.4s cubic-bezier(0.4, 0, 0.2, 1) infinite 1.2s;
+  }
+  .overlay.active .sweep.left {
+    animation: sweepV 2.4s cubic-bezier(0.4, 0, 0.2, 1) infinite 0.6s;
+  }
+  .overlay.active .sweep.right {
+    animation: sweepV 2.4s cubic-bezier(0.4, 0, 0.2, 1) infinite 1.8s;
+  }
+
+  @keyframes sweepH {
+    0%   { left: -220px; opacity: 0; }
+    10%  { opacity: 1; }
+    90%  { opacity: 1; }
+    100% { left: 100%; opacity: 0; }
+  }
+
+  @keyframes sweepV {
+    0%   { top: -220px; opacity: 0; }
+    10%  { opacity: 1; }
+    90%  { opacity: 1; }
+    100% { top: 100%; opacity: 0; }
+  }
+
+  /* ── Corner bloom ──────────────────────────────────────────────── */
+  .corner {
+    position: absolute;
+    width: 140px;
+    height: 140px;
+    pointer-events: none;
+  }
+
+  .corner.tl {
+    top: -20px; left: -20px;
+    background: radial-gradient(circle at 15% 15%,
+      rgba(200, 185, 255, 0.55) 0%,
+      rgba(157, 140, 255, 0.15) 35%,
+      transparent 65%
+    );
+  }
+
+  .corner.tr {
+    top: -20px; right: -20px;
+    background: radial-gradient(circle at 85% 15%,
+      rgba(200, 185, 255, 0.55) 0%,
+      rgba(157, 140, 255, 0.15) 35%,
+      transparent 65%
+    );
+  }
+
+  .corner.bl {
+    bottom: -20px; left: -20px;
+    background: radial-gradient(circle at 15% 85%,
+      rgba(200, 185, 255, 0.55) 0%,
+      rgba(157, 140, 255, 0.15) 35%,
+      transparent 65%
+    );
+  }
+
+  .corner.br {
+    bottom: -20px; right: -20px;
+    background: radial-gradient(circle at 85% 85%,
+      rgba(200, 185, 255, 0.55) 0%,
+      rgba(157, 140, 255, 0.15) 35%,
+      transparent 65%
+    );
+  }
+
+  /* Gentle corner breathing */
+  .overlay.active .corner {
+    animation: cornerPulse 3s ease-in-out infinite;
+  }
+
+  .overlay.active .corner.tr,
+  .overlay.active .corner.bl {
+    animation-delay: 1.5s;
+  }
+
+  @keyframes cornerPulse {
+    0%, 100% { opacity: 0.7; transform: scale(1); }
+    50%      { opacity: 1;   transform: scale(1.08); }
+  }
+
+  /* ── Edge breathing ────────────────────────────────────────────── */
+  .overlay.active .edge {
+    animation: edgeBreathe 3s ease-in-out infinite;
+  }
+
+  .overlay.active .edge.left,
+  .overlay.active .edge.right {
+    animation-delay: 1.5s;
+  }
+
+  @keyframes edgeBreathe {
+    0%, 100% { opacity: 0.65; }
+    50%      { opacity: 1; }
+  }
+</style>
+</head>
+<body>
+  <div class="overlay" id="overlay">
+    <div class="vignette"></div>
+
+    <div class="edge top"></div>
+    <div class="edge bottom"></div>
+    <div class="edge left"></div>
+    <div class="edge right"></div>
+
+    <div class="sweep horizontal top"></div>
+    <div class="sweep horizontal bottom"></div>
+    <div class="sweep vertical left"></div>
+    <div class="sweep vertical right"></div>
+
+    <div class="corner tl"></div>
+    <div class="corner tr"></div>
+    <div class="corner bl"></div>
+    <div class="corner br"></div>
+  </div>
+
+  <script>
+    const { ipcRenderer } = require('electron')
+    const overlay = document.getElementById('overlay')
+    let hideTimer = null
+
+    ipcRenderer.on('show-glow', (_event, data) => {
+      const duration = (data && data.duration) || 4000
+
+      if (hideTimer) clearTimeout(hideTimer)
+
+      overlay.classList.remove('fade-out')
+      void overlay.offsetWidth
+      overlay.classList.add('active')
+
+      hideTimer = setTimeout(() => {
+        overlay.classList.add('fade-out')
+        overlay.classList.remove('active')
+        setTimeout(() => overlay.classList.remove('fade-out'), 1600)
+      }, duration)
+    })
+
+    ipcRenderer.on('hide-glow', () => {
+      if (hideTimer) clearTimeout(hideTimer)
+      overlay.classList.add('fade-out')
+      overlay.classList.remove('active')
+    })
+  </script>
+</body>
+</html>

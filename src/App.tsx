@@ -6,9 +6,11 @@ import Chat from './pages/Chat'
 import Settings from './pages/Settings'
 import Privacy from './pages/Privacy'
 import Logs from './pages/Logs'
+import { useWakeWord } from './hooks/useWakeWord'
 
 function App() {
   const location = useLocation()
+  useWakeWord()
 
   return (
     <div className="min-h-screen bg-ayo-bg noise-bg">

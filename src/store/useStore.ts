@@ -23,6 +23,14 @@ export interface LogEntry {
   details?: string
 }
 
+export interface AudioDevice {
+  index: number
+  name: string
+  channels: number
+  sampleRate: number
+  isDefault: boolean
+}
+
 export interface Settings {
   serverUrl: string
   proactivityLevel: 'low' | 'medium' | 'high'
@@ -31,6 +39,8 @@ export interface Settings {
   enableCameraAccess: boolean
   enableContextCapture: boolean
   dataRetention: boolean
+  selectedInputDevice: number | null
+  selectedOutputDevice: string | null
   hotkeys: {
     privacyMode: string
     cameraToggle: string
@@ -38,10 +48,18 @@ export interface Settings {
   }
 }
 
+export type WakeWordStatus = 'stopped' | 'listening' | 'disconnected' | 'detected'
+
 interface AppState {
   // Status
   assistantStatus: AssistantStatus
   connectionStatus: ConnectionStatus
+  
+  // Wake Word
+  wakeWordStatus: WakeWordStatus
+  wakeWordEnabled: boolean
+  lastWakeWordTranscript: string | null
+  lastWakeWordTime: number | null
   
   // Privacy
   privacyMode: boolean
@@ -66,6 +84,10 @@ interface AppState {
   // Actions
   setAssistantStatus: (status: AssistantStatus) => void
   setConnectionStatus: (status: ConnectionStatus) => void
+  setWakeWordStatus: (status: WakeWordStatus) => void
+  setWakeWordEnabled: (enabled: boolean) => void
+  onWakeWordDetected: (transcript: string, timestamp: number) => void
+  clearWakeWordDetection: () => void
   togglePrivacyMode: () => void
   toggleCamera: () => void
   toggleContextCapture: () => void
@@ -80,6 +102,12 @@ export const useStore = create<AppState>((set) => ({
   // Initial Status
   assistantStatus: 'idle',
   connectionStatus: 'online',
+  
+  // Wake Word
+  wakeWordStatus: 'stopped',
+  wakeWordEnabled: true,
+  lastWakeWordTranscript: null,
+  lastWakeWordTime: null,
   
   // Privacy defaults
   privacyMode: false,
@@ -113,6 +141,8 @@ export const useStore = create<AppState>((set) => ({
     enableCameraAccess: false,
     enableContextCapture: true,
     dataRetention: false,
+    selectedInputDevice: null,
+    selectedOutputDevice: null,
     hotkeys: {
       privacyMode: 'Ctrl+Shift+P',
       cameraToggle: 'Ctrl+Shift+C',
@@ -129,6 +159,27 @@ export const useStore = create<AppState>((set) => ({
   // Actions
   setAssistantStatus: (status) => set({ assistantStatus: status }),
   setConnectionStatus: (status) => set({ connectionStatus: status }),
+  
+  setWakeWordStatus: (status) => set({ wakeWordStatus: status }),
+  setWakeWordEnabled: (enabled) => set({ wakeWordEnabled: enabled }),
+
+  onWakeWordDetected: (transcript, timestamp) => set((state) => ({
+    wakeWordStatus: 'detected',
+    lastWakeWordTranscript: transcript,
+    lastWakeWordTime: timestamp,
+    assistantStatus: 'listening',
+    logs: [...state.logs, {
+      id: Date.now().toString(),
+      type: 'ai',
+      message: `Wake word detected: "${transcript}"`,
+      timestamp: new Date(timestamp),
+    }],
+  })),
+
+  clearWakeWordDetection: () => set({
+    wakeWordStatus: 'listening',
+    assistantStatus: 'idle',
+  }),
   
   togglePrivacyMode: () => set((state) => {
     const newPrivacyMode = !state.privacyMode
