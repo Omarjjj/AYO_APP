@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, screen } from 'electron'
+import { app, BrowserWindow, ipcMain, screen, globalShortcut } from 'electron'
 import path from 'path'
 import { spawn, ChildProcess } from 'child_process'
 import WebSocket from 'ws'
@@ -56,10 +56,10 @@ function createOverlayWindow() {
   const { width, height } = primaryDisplay.bounds
 
   overlayWindow = new BrowserWindow({
-    x: 0,
-    y: 0,
-    width,
-    height,
+    x: primaryDisplay.bounds.x,
+    y: primaryDisplay.bounds.y,
+    width: primaryDisplay.bounds.width,
+    height: primaryDisplay.bounds.height,
     frame: false,
     transparent: true,
     backgroundColor: '#00000000',
@@ -76,9 +76,10 @@ function createOverlayWindow() {
     },
   })
 
-  overlayWindow.setAlwaysOnTop(true, 'screen-saver')
-  overlayWindow.setIgnoreMouseEvents(true)
-  overlayWindow.setVisibleOnAllWorkspaces(true)
+  // To ensure it covers the taskbar on Windows
+  overlayWindow.setAlwaysOnTop(true, 'screen-saver', 1)
+  overlayWindow.setIgnoreMouseEvents(true, { forward: true })
+  overlayWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
 
   const overlayPath = isDev
     ? path.join(__dirname, '..', 'electron', 'overlay.html')
@@ -273,6 +274,12 @@ app.whenReady().then(() => {
   createWindow()
   createOverlayWindow()
   startWakeWord()
+  registerWakeHotkey()
+  registerPttHotkey()
+})
+
+app.on('will-quit', () => {
+  globalShortcut.unregisterAll()
 })
 
 app.on('window-all-closed', () => {
@@ -315,6 +322,70 @@ ipcMain.on('close-window', () => {
 })
 
 // ── IPC: Wake Word Controls ─────────────────────────────────────────
+
+let currentWakeHotkey = 'CommandOrControl+Shift+A'
+let currentWakeMode = 'both'
+
+function registerWakeHotkey() {
+  if (!currentWakeHotkey) return
+  if (currentWakeMode === 'hotkey' || currentWakeMode === 'both') {
+    try {
+      globalShortcut.register(currentWakeHotkey, () => {
+        console.log('[main] ★ Wake hotkey pressed! Notifying renderer...')
+        mainWindow?.webContents.send('wake-word-detected', {
+          transcript: 'ayo (hotkey)',
+          timestamp: Date.now(),
+        })
+        showScreenGlow()
+      })
+    } catch (err) {
+      console.error('[main] Failed to register wake hotkey:', err)
+    }
+  }
+}
+
+ipcMain.handle('set-wake-hotkey', (_event, mode: string, hotkey: string) => {
+  if (currentWakeHotkey) {
+    try { globalShortcut.unregister(currentWakeHotkey) } catch {}
+  }
+  currentWakeMode = mode
+  currentWakeHotkey = hotkey
+  registerWakeHotkey()
+  
+  if (mode === 'voice' || mode === 'both') {
+    startWakeWord()
+  } else if (mode === 'hotkey') {
+    stopWakeWord()
+  }
+  
+  return true
+})
+
+let currentPttEnabled = false
+let currentPttHotkey = 'CommandOrControl+Space'
+
+function registerPttHotkey() {
+  if (!currentPttHotkey || !currentPttEnabled) return
+  try {
+    globalShortcut.register(currentPttHotkey, () => {
+      console.log('[main] ★ PTT hotkey pressed! Notifying renderer...')
+      mainWindow?.webContents.send('push-to-talk-pressed')
+      showScreenGlow()
+    })
+  } catch (err) {
+    console.error('[main] Failed to register PTT hotkey:', err)
+  }
+}
+
+ipcMain.handle('set-ptt-hotkey', (_event, enabled: boolean, hotkey: string) => {
+  if (currentPttHotkey) {
+    try { globalShortcut.unregister(currentPttHotkey) } catch {}
+  }
+  currentPttEnabled = enabled
+  currentPttHotkey = hotkey
+  registerPttHotkey()
+  return true
+})
 
 ipcMain.handle('wake-word-start', () => {
   startWakeWord()
