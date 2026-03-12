@@ -71,6 +71,63 @@ function SettingRow({ label, description, children }: SettingRowProps) {
   )
 }
 
+function HotkeyRecorder({ value, onChange }: { value: string, onChange: (val: string) => void }) {
+  const [recording, setRecording] = useState(false)
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (!recording) return
+    e.preventDefault()
+    
+    if (e.key === 'Escape') {
+      setRecording(false)
+      return
+    }
+    
+    const keys = []
+    if (e.ctrlKey) keys.push('CommandOrControl')
+    if (e.altKey) keys.push('Alt')
+    if (e.shiftKey) keys.push('Shift')
+    if (e.metaKey) keys.push('Super')
+    
+    // Don't just record modifiers
+    if (!['Control', 'Alt', 'Shift', 'Meta'].includes(e.key)) {
+      let key = e.key.toUpperCase()
+      if (key === ' ') key = 'Space'
+      
+      keys.push(key)
+      onChange(keys.join('+'))
+      setRecording(false)
+    }
+  }
+
+      return (
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setRecording(true)}
+            onKeyDown={handleKeyDown}
+            onBlur={() => setRecording(false)}
+            className={cn(
+              "px-3 py-1.5 rounded-lg text-xs font-mono border transition-colors min-w-[120px]",
+              recording 
+                ? "bg-ayo-purple/20 border-ayo-purple text-ayo-purple animate-pulse" 
+                : "bg-ayo-bg-dark border-ayo-border/50 text-ayo-silver hover:border-ayo-purple/50"
+            )}
+          >
+            {recording ? "Press keys..." : (value || "None")}
+          </button>
+          {value && (
+            <button 
+              onClick={() => onChange('')} 
+              className="p-1.5 text-ayo-muted hover:text-ayo-error transition-colors rounded-md hover:bg-ayo-error/10"
+              title="Clear hotkey"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          )}
+        </div>
+      )
+    }
+
 export default function Settings() {
   const { settings, updateSettings, clearLogs, wakeWordStatus } = useStore()
   const [testingConnection, setTestingConnection] = useState(false)
@@ -448,7 +505,59 @@ export default function Settings() {
 
         {/* Hotkeys */}
         <motion.div variants={itemVariants}>
-          <SettingSection title="Hotkeys" icon={<Keyboard className="w-4 h-4 text-ayo-purple" strokeWidth={1.5} />}>
+          <SettingSection title="Hotkeys & Wake" icon={<Keyboard className="w-4 h-4 text-ayo-purple" strokeWidth={1.5} />}>
+            <SettingRow label="Wake Mode" description="How to call Ayo">
+              <select
+                value={settings.wakeMode}
+                onChange={(e) => {
+                  const mode = e.target.value as 'voice' | 'hotkey' | 'both'
+                  updateSettings({ wakeMode: mode })
+                  window.electronAPI?.setWakeHotkey?.(mode, settings.wakeHotkey)
+                }}
+                className="px-3 py-1.5 rounded-lg text-xs text-ayo-silver bg-ayo-bg-dark border border-ayo-border/50"
+              >
+                <option value="voice">Voice Only (Mic)</option>
+                <option value="hotkey">Hotkey Only</option>
+                <option value="both">Both (Hybrid)</option>
+              </select>
+            </SettingRow>
+
+            {(settings.wakeMode === 'hotkey' || settings.wakeMode === 'both') && (
+              <SettingRow label="Wake Hotkey" description="Global shortcut to wake Ayo">
+                <HotkeyRecorder 
+                  value={settings.wakeHotkey} 
+                  onChange={(val) => {
+                    updateSettings({ wakeHotkey: val })
+                    window.electronAPI?.setWakeHotkey?.(settings.wakeMode, val)
+                  }} 
+                />
+              </SettingRow>
+            )}
+
+            <SettingRow label="Push to Talk" description="Hold to talk without wake word">
+              <Toggle
+                enabled={settings.enablePushToTalk}
+                onChange={() => {
+                  const enabled = !settings.enablePushToTalk
+                  updateSettings({ enablePushToTalk: enabled })
+                  window.electronAPI?.setPttHotkey?.(enabled, settings.pushToTalkHotkey)
+                }}
+                size="sm"
+              />
+            </SettingRow>
+
+            {settings.enablePushToTalk && (
+              <SettingRow label="PTT Hotkey" description="Global shortcut for Push to Talk">
+                <HotkeyRecorder 
+                  value={settings.pushToTalkHotkey} 
+                  onChange={(val) => {
+                    updateSettings({ pushToTalkHotkey: val })
+                    window.electronAPI?.setPttHotkey?.(settings.enablePushToTalk, val)
+                  }} 
+                />
+              </SettingRow>
+            )}
+
             <SettingRow label="Privacy Mode">
               <code className="px-2 py-1 bg-ayo-bg-dark border border-ayo-border/50 rounded text-[10px] text-ayo-purple">
                 {settings.hotkeys.privacyMode}
