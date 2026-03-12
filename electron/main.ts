@@ -70,23 +70,39 @@ function createOverlayWindow() {
     resizable: false,
     movable: false,
     show: false,
+    fullscreen: true,
     webPreferences: {
       nodeIntegration: true,
       contextIsolation: false,
     },
   })
 
-  // To ensure it covers the taskbar on Windows
+  // Ensure it covers the full display (including taskbar area) and stays above it.
+  overlayWindow.setBounds(primaryDisplay.bounds)
+  overlayWindow.setFullScreen(true)
   overlayWindow.setAlwaysOnTop(true, 'screen-saver', 1)
   overlayWindow.setIgnoreMouseEvents(true, { forward: true })
   overlayWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
-
   const overlayPath = isDev
     ? path.join(__dirname, '..', 'electron', 'overlay.html')
     : path.join(__dirname, 'overlay.html')
   overlayWindow.loadFile(overlayPath)
 
+  // Keep the overlay pinned to the full screen if display metrics change
+  // (e.g. DPI change, taskbar moved, resolution change).
+  const resyncBounds = () => {
+    if (!overlayWindow) return
+    const d = screen.getPrimaryDisplay()
+    overlayWindow.setBounds(d.bounds)
+  }
+  screen.on('display-metrics-changed', resyncBounds)
+  screen.on('display-added', resyncBounds)
+  screen.on('display-removed', resyncBounds)
+
   overlayWindow.on('closed', () => {
+    screen.removeListener('display-metrics-changed', resyncBounds)
+    screen.removeListener('display-added', resyncBounds)
+    screen.removeListener('display-removed', resyncBounds)
     overlayWindow = null
   })
 }
@@ -95,7 +111,8 @@ function showScreenGlow(duration: number = GLOW_DURATION_MS) {
   if (!overlayWindow) createOverlayWindow()
   if (!overlayWindow) return
 
-  overlayWindow.show()
+  // Don't steal focus from the main window.
+  overlayWindow.showInactive()
   overlayWindow.webContents.send('show-glow', { duration })
 
   setTimeout(() => {

@@ -14,36 +14,47 @@ export default function Toggle({
   disabled = false,
   size = 'md'
 }: ToggleProps) {
-  const sizes = {
-    sm: { track: 'w-9 h-5', thumb: 'w-3.5 h-3.5', translate: 16 },
-    md: { track: 'w-11 h-6', thumb: 'w-4 h-4', translate: 20 },
-    lg: { track: 'w-14 h-7', thumb: 'w-5 h-5', translate: 28 },
+  const sizes: Record<NonNullable<ToggleProps['size']>, { w: number; h: number; thumb: number }> = {
+    sm: { w: 36, h: 20, thumb: 14 },
+    md: { w: 44, h: 24, thumb: 16 },
+    lg: { w: 56, h: 28, thumb: 20 },
   }
+  const s = sizes[size]
+  const inset = (s.h - s.thumb) / 2
+  const travel = s.w - s.thumb - inset * 2
 
   return (
     <button
-      onClick={onChange}
+      onClick={(e) => {
+        e.stopPropagation()
+        if (!disabled) onChange()
+      }}
       disabled={disabled}
       className={cn(
-        "relative rounded-full transition-all duration-300 focus:outline-none",
-        sizes[size].track,
+        "relative inline-flex p-0 border-0 rounded-full transition-all duration-300 focus:outline-none appearance-none",
         enabled 
           ? "bg-ayo-purple/80 shadow-glow-sm" 
           : "bg-ayo-border/60",
         disabled && "opacity-40 cursor-not-allowed"
       )}
+      style={{ width: s.w, height: s.h }}
     >
       <motion.div
         initial={false}
         animate={{
-          x: enabled ? sizes[size].translate : 4,
+          x: enabled ? travel : 0,
         }}
         transition={{ type: 'spring', stiffness: 500, damping: 30 }}
         className={cn(
-          "absolute top-1/2 -translate-y-1/2 rounded-full shadow-md transition-colors",
-          sizes[size].thumb,
+          "absolute rounded-full shadow-md transition-colors",
           enabled ? "bg-white" : "bg-ayo-silver/80"
         )}
+        style={{
+          left: inset,
+          top: inset,
+          width: s.thumb,
+          height: s.thumb,
+        }}
       />
     </button>
   )
