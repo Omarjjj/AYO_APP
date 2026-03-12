@@ -10,12 +10,20 @@ contextBridge.exposeInMainWorld('electronAPI', {
   startWakeWord: () => ipcRenderer.invoke('wake-word-start'),
   stopWakeWord: () => ipcRenderer.invoke('wake-word-stop'),
   getWakeWordStatus: () => ipcRenderer.invoke('wake-word-status'),
+  setWakeHotkey: (mode: string, hotkey: string) => ipcRenderer.invoke('set-wake-hotkey', mode, hotkey),
+  setPttHotkey: (enabled: boolean, hotkey: string) => ipcRenderer.invoke('set-ptt-hotkey', enabled, hotkey),
 
   // Wake word events (main → renderer)
   onWakeWordDetected: (callback: (data: { transcript: string; timestamp: number }) => void) => {
     const handler = (_event: Electron.IpcRendererEvent, data: { transcript: string; timestamp: number }) => callback(data)
     ipcRenderer.on('wake-word-detected', handler)
     return () => ipcRenderer.removeListener('wake-word-detected', handler)
+  },
+
+  onPushToTalkPressed: (callback: () => void) => {
+    const handler = () => callback()
+    ipcRenderer.on('push-to-talk-pressed', handler)
+    return () => ipcRenderer.removeListener('push-to-talk-pressed', handler)
   },
 
   onWakeWordStatus: (callback: (data: { status: string }) => void) => {
@@ -64,8 +72,13 @@ declare global {
         pythonRunning: boolean
         wsConnected: boolean
       }>
+      setWakeHotkey: (mode: string, hotkey: string) => Promise<boolean>
+      setPttHotkey: (enabled: boolean, hotkey: string) => Promise<boolean>
       onWakeWordDetected: (
         callback: (data: { transcript: string; timestamp: number }) => void
+      ) => () => void
+      onPushToTalkPressed: (
+        callback: () => void
       ) => () => void
       onWakeWordStatus: (
         callback: (data: { status: string }) => void

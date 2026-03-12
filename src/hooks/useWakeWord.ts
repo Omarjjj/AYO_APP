@@ -36,9 +36,27 @@ export function useWakeWord() {
       }
     })
 
+    // Initialize hotkey settings
+    const settings = useStore.getState().settings
+    if (api.setWakeHotkey) {
+      api.setWakeHotkey(settings.wakeMode, settings.wakeHotkey).catch(() => {})
+    }
+    if (api.setPttHotkey) {
+      api.setPttHotkey(settings.enablePushToTalk, settings.pushToTalkHotkey).catch(() => {})
+    }
+
+    const removePtt = api.onPushToTalkPressed?.(() => {
+      console.log('[useWakeWord] PTT pressed')
+      onWakeWordDetected('PTT Activated', Date.now())
+      setTimeout(() => {
+        clearWakeWordDetection()
+      }, DETECTION_DISPLAY_MS)
+    })
+
     return () => {
       removeDetected()
       removeStatus?.()
+      removePtt?.()
     }
   }, [setWakeWordStatus, onWakeWordDetected, clearWakeWordDetection])
 }
