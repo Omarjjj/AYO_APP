@@ -30,11 +30,10 @@
     transition: opacity 1.2s ease-in;
   }
 
-  /* ── App-Themed Edge Pulse ────────────────────────────────── */
+  /* ── Ayo theme: purple only (#9d8cff, #7c6bc4) ───────────────── */
   .edge-pulse {
     position: absolute;
     inset: 0;
-    /* Base subtle inset shadow */
     box-shadow: inset 0 0 0 0 transparent;
   }
 
@@ -59,11 +58,11 @@
     }
   }
 
-  /* Optional: A very subtle vignette to frame the screen slightly */
+  /* Vignette: same dark purple as app (--ayo-bg) */
   .vignette {
     position: absolute;
     inset: 0;
-    background: radial-gradient(circle at center, transparent 70%, rgba(20, 10, 40, 0.15) 100%);
+    background: radial-gradient(circle at center, transparent 65%, rgba(13, 10, 20, 0.4) 100%);
   }
 </style>
 </head>

@@ -13,6 +13,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   setWakeHotkey: (mode: string, hotkey: string) => ipcRenderer.invoke('set-wake-hotkey', mode, hotkey),
   setPttHotkey: (enabled: boolean, hotkey: string) => ipcRenderer.invoke('set-ptt-hotkey', enabled, hotkey),
 
+  // Context pipeline
+  getContextStatus: () => ipcRenderer.invoke('context-get-status'),
+
   // Wake word events (main → renderer)
   onWakeWordDetected: (callback: (data: { transcript: string; timestamp: number }) => void) => {
     const handler = (_event: Electron.IpcRendererEvent, data: { transcript: string; timestamp: number }) => callback(data)
@@ -72,8 +75,7 @@ declare global {
         pythonRunning: boolean
         wsConnected: boolean
       }>
-      setWakeHotkey: (mode: string, hotkey: string) => Promise<boolean>
-      setPttHotkey: (enabled: boolean, hotkey: string) => Promise<boolean>
+      getContextStatus: () => Promise<any>
       onWakeWordDetected: (
         callback: (data: { transcript: string; timestamp: number }) => void
       ) => () => void
