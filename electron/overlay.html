@@ -30,11 +30,10 @@
     transition: opacity 1.2s ease-in;
   }
 
-  /* ── App-Themed Edge Pulse ────────────────────────────────── */
+  /* ── Ayo theme: purple only (#9d8cff, #7c6bc4) ───────────────── */
   .edge-pulse {
     position: absolute;
     inset: 0;
-    /* Base subtle inset shadow */
     box-shadow: inset 0 0 0 0 transparent;
   }
 
@@ -42,26 +41,25 @@
     animation: borderBreathe 2.5s ease-in-out infinite;
   }
 
-  /* Using the app's purple (#9d8cff), cyan (#00f0ff), and pink (#ff64c8) */
+  /* Ayo purple (#9d8cff) and purple-dim (#7c6bc4) */
   @keyframes borderBreathe {
     0%, 100% {
       box-shadow:
-        inset 0 0 30px 5px rgba(157, 140, 255, 0.4),
-        inset 0 0 80px 15px rgba(0, 240, 255, 0.1);
+        inset 0 0 40px 8px rgba(157, 140, 255, 0.35),
+        inset 0 0 100px 20px rgba(124, 107, 196, 0.12);
     }
     50% {
       box-shadow:
-        inset 0 0 60px 15px rgba(157, 140, 255, 0.8),
-        inset 0 0 150px 30px rgba(0, 240, 255, 0.3),
-        inset 0 0 20px 2px rgba(255, 100, 200, 0.4); /* slight pink/magenta accent */
+        inset 0 0 70px 18px rgba(157, 140, 255, 0.6),
+        inset 0 0 160px 35px rgba(124, 107, 196, 0.25);
     }
   }
 
-  /* Optional: A very subtle vignette to frame the screen slightly */
+  /* Vignette: same dark purple as app (--ayo-bg) */
   .vignette {
     position: absolute;
     inset: 0;
-    background: radial-gradient(circle at center, transparent 70%, rgba(20, 10, 40, 0.15) 100%);
+    background: radial-gradient(circle at center, transparent 65%, rgba(13, 10, 20, 0.4) 100%);
   }
 </style>
 </head>
