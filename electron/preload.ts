@@ -11,6 +11,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   stopWakeWord: () => ipcRenderer.invoke('wake-word-stop'),
   getWakeWordStatus: () => ipcRenderer.invoke('wake-word-status'),
 
+  // Context pipeline
+  getContextStatus: () => ipcRenderer.invoke('context-get-status'),
+
   // Wake word events (main → renderer)
   onWakeWordDetected: (callback: (data: { transcript: string; timestamp: number }) => void) => {
     const handler = (_event: Electron.IpcRendererEvent, data: { transcript: string; timestamp: number }) => callback(data)
@@ -64,6 +67,7 @@ declare global {
         pythonRunning: boolean
         wsConnected: boolean
       }>
+      getContextStatus: () => Promise<any>
       onWakeWordDetected: (
         callback: (data: { transcript: string; timestamp: number }) => void
       ) => () => void

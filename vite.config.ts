@@ -13,7 +13,14 @@ export default defineConfig({
         vite: {
           build: {
             rollupOptions: {
-              external: ['ws', 'bufferutil', 'utf-8-validate'],
+              external: [
+                'ws', 
+                'bufferutil', 
+                'utf-8-validate', 
+                'tesseract.js', 
+                'active-win', 
+                'screenshot-desktop'
+              ],
             },
           },
         },

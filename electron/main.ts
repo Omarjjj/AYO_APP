@@ -1,7 +1,9 @@
-import { app, BrowserWindow, ipcMain, screen } from 'electron'
+import { app, BrowserWindow, ipcMain, screen, globalShortcut } from 'electron'
 import path from 'path'
 import { spawn, ChildProcess } from 'child_process'
 import WebSocket from 'ws'
+
+import { startContextPipeline, stopContextPipeline, getContextStatus, runContextTick } from './screenContext/contextManager'
 
 const isDev = process.env.NODE_ENV !== 'production'
 
@@ -273,11 +275,21 @@ app.whenReady().then(() => {
   createWindow()
   createOverlayWindow()
   startWakeWord()
+  startContextPipeline()
+
+  // Register hotkey for manual Context Tick
+  // We use Alt+P instead of just 'P' because registering a single letter globally
+  // would completely disable your ability to type that letter anywhere on your PC!
+  globalShortcut.register('Alt+P', () => {
+    console.log('[main] Manual context tick triggered via Alt+P hotkey!')
+    runContextTick()
+  })
 })
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
     stopWakeWord()
+    stopContextPipeline()
     app.quit()
   }
 })
@@ -289,7 +301,9 @@ app.on('activate', () => {
 })
 
 app.on('before-quit', () => {
+  globalShortcut.unregisterAll()
   stopWakeWord()
+  stopContextPipeline()
   if (overlayWindow) {
     overlayWindow.close()
     overlayWindow = null
@@ -332,6 +346,12 @@ ipcMain.handle('wake-word-status', () => {
     pythonRunning: pythonProcess !== null,
     wsConnected: wakeWordSocket?.readyState === WebSocket.OPEN,
   }
+})
+
+// ── IPC: Context Pipeline Controls ──────────────────────────────────
+
+ipcMain.handle('context-get-status', () => {
+  return getContextStatus()
 })
 
 // ── IPC: Audio Device Management ────────────────────────────────────
