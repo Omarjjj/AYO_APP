@@ -12,7 +12,7 @@ import { cn } from '../../lib/utils'
 import { useStore } from '../../store/useStore'
 
 const navItems = [
-  { path: '/', icon: LayoutDashboard, label: 'Dashboard' },
+  { path: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
   { path: '/chat', icon: MessageSquare, label: 'Chat' },
   { path: '/settings', icon: Settings, label: 'Settings' },
   { path: '/privacy', icon: Shield, label: 'Privacy' },
@@ -57,6 +57,7 @@ export default function Sidebar() {
                 window.setTimeout(() => setLogoVideoOk(true), 1000)
               }}
             >
+              <source src="/ayo_animatelogo.webm" type="video/webm" />
               <source src="/ayo_animatelogo.mp4" type="video/mp4" />
             </video>
           ) : (
