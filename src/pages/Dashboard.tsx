@@ -9,7 +9,6 @@ import {
   CameraOff,
   Scan,
   ScanLine,
-  Sparkles,
   ArrowRight,
   Wifi,
   Clock
@@ -101,45 +100,55 @@ export default function Dashboard() {
           <motion.div
             animate={{ 
               boxShadow: isAyoDetected
-                ? ['0 0 60px rgba(157,140,255,0.6)', '0 0 90px rgba(157,140,255,0.9)', '0 0 60px rgba(157,140,255,0.6)']
+                ? ['0 0 60px rgba(157,140,255,0.8), 0 0 100px rgba(157,140,255,0.9)', '0 0 90px rgba(157,140,255,1), 0 0 150px rgba(157,140,255,1)', '0 0 60px rgba(157,140,255,0.8), 0 0 100px rgba(157,140,255,0.9)']
                 : assistantStatus !== 'idle' 
                   ? ['0 0 40px rgba(157,140,255,0.3)', '0 0 60px rgba(157,140,255,0.5)', '0 0 40px rgba(157,140,255,0.3)']
                   : '0 0 30px rgba(157,140,255,0.2)',
               scale: isAyoDetected ? 1.15 : 1,
             }}
-            transition={{ duration: isAyoDetected ? 0.6 : 2, repeat: Infinity }}
+            transition={{ 
+              duration: isAyoDetected ? 0.6 : 2, 
+              repeat: (isAyoDetected || assistantStatus !== 'idle') ? Infinity : 0,
+              ease: "easeInOut"
+            }}
             className={cn(
-              "relative w-24 h-24 rounded-full border flex items-center justify-center transition-colors duration-300",
+              "relative w-24 h-24 rounded-full border flex items-center justify-center transition-colors duration-300 overflow-hidden",
               isAyoDetected
-                ? "bg-gradient-to-br from-ayo-purple/50 to-ayo-purple-dark/50 border-ayo-purple/60"
+                ? "bg-gradient-to-br from-ayo-purple/60 to-ayo-purple-dark/60 border-ayo-purple shadow-[inset_0_0_20px_rgba(157,140,255,0.5)]"
                 : "bg-gradient-to-br from-ayo-purple/30 to-ayo-purple-dark/30 border-ayo-purple/30"
             )}
           >
-            <Sparkles className={cn(
-              "w-10 h-10 transition-colors duration-300",
-              isAyoDetected ? "text-white" : "text-ayo-purple"
-            )} strokeWidth={1.5} />
+            <video
+              className="w-full h-full rounded-full object-cover mix-blend-screen"
+              autoPlay
+              loop
+              muted
+              playsInline
+              preload="auto"
+            >
+              <source src="/ayo_animatelogo.mp4" type="video/mp4" />
+            </video>
             
             {/* Detection pulse rings */}
             {isAyoDetected && (
               <>
                 <motion.div
-                  initial={{ scale: 1, opacity: 0.7 }}
-                  animate={{ scale: 2, opacity: 0 }}
-                  transition={{ duration: 1, repeat: Infinity }}
-                  className="absolute inset-0 rounded-full border-2 border-ayo-purple"
+                  initial={{ scale: 1, opacity: 0.9 }}
+                  animate={{ scale: 2.2, opacity: 0 }}
+                  transition={{ duration: 1.2, repeat: Infinity, ease: "easeOut" }}
+                  className="absolute inset-0 rounded-full border-[3px] border-ayo-purple shadow-[0_0_20px_rgba(157,140,255,0.8),inset_0_0_20px_rgba(157,140,255,0.8)]"
                 />
                 <motion.div
-                  initial={{ scale: 1, opacity: 0.7 }}
-                  animate={{ scale: 2, opacity: 0 }}
-                  transition={{ duration: 1, repeat: Infinity, delay: 0.3 }}
-                  className="absolute inset-0 rounded-full border-2 border-ayo-purple"
+                  initial={{ scale: 1, opacity: 0.9 }}
+                  animate={{ scale: 2.2, opacity: 0 }}
+                  transition={{ duration: 1.2, repeat: Infinity, delay: 0.4, ease: "easeOut" }}
+                  className="absolute inset-0 rounded-full border-[2px] border-ayo-purple shadow-[0_0_30px_rgba(157,140,255,0.9)]"
                 />
                 <motion.div
-                  initial={{ scale: 1, opacity: 0.7 }}
-                  animate={{ scale: 2, opacity: 0 }}
-                  transition={{ duration: 1, repeat: Infinity, delay: 0.6 }}
-                  className="absolute inset-0 rounded-full border-2 border-ayo-purple"
+                  initial={{ scale: 1, opacity: 0.9 }}
+                  animate={{ scale: 2.2, opacity: 0 }}
+                  transition={{ duration: 1.2, repeat: Infinity, delay: 0.8, ease: "easeOut" }}
+                  className="absolute inset-0 rounded-full border-[2px] border-ayo-purple shadow-[0_0_15px_rgba(157,140,255,0.6)]"
                 />
               </>
             )}
