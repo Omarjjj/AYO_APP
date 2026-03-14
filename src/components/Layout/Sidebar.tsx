@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { NavLink } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { 
@@ -20,6 +21,7 @@ const navItems = [
 
 export default function Sidebar() {
   const { privacyMode } = useStore()
+  const [logoVideoOk, setLogoVideoOk] = useState(true)
 
   return (
     <motion.aside
@@ -35,17 +37,41 @@ export default function Sidebar() {
         transition={{ delay: 0.2, type: 'spring', stiffness: 200 }}
         className="mb-10"
       >
-        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-ayo-purple to-ayo-purple-dim flex items-center justify-center shadow-glow-sm">
-          <span className="text-white font-bold text-lg">A</span>
+        <div
+          className={cn(
+            "w-10 h-10 rounded-xl flex items-center justify-center shadow-glow-sm overflow-hidden",
+            logoVideoOk ? "bg-transparent" : "bg-gradient-to-br from-ayo-purple to-ayo-purple-dim"
+          )}
+        >
+          {logoVideoOk ? (
+            <video
+              className="w-full h-full rounded-xl object-cover"
+              autoPlay
+              loop
+              muted
+              playsInline
+              preload="auto"
+              onError={() => {
+                // If the file was missing (or temporarily failed), keep retrying.
+                setLogoVideoOk(false)
+                window.setTimeout(() => setLogoVideoOk(true), 1000)
+              }}
+            >
+              <source src="/ayo_animatelogo.mp4" type="video/mp4" />
+            </video>
+          ) : (
+            <span className="text-white font-bold text-lg">A</span>
+          )}
         </div>
       </motion.div>
 
       {/* Navigation */}
-      <nav className="flex-1 flex flex-col gap-1">
+      <nav className="flex-1 flex flex-col items-center gap-1">
         {navItems.map((item, index) => (
           <NavLink
             key={item.path}
             to={item.path}
+            className="block"
           >
             {({ isActive }) => (
               <motion.div

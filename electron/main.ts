@@ -58,10 +58,10 @@ function createOverlayWindow() {
   const { width, height } = primaryDisplay.bounds
 
   overlayWindow = new BrowserWindow({
-    x: 0,
-    y: 0,
-    width,
-    height,
+    x: primaryDisplay.bounds.x,
+    y: primaryDisplay.bounds.y,
+    width: primaryDisplay.bounds.width,
+    height: primaryDisplay.bounds.height,
     frame: false,
     transparent: true,
     backgroundColor: '#00000000',
@@ -72,22 +72,39 @@ function createOverlayWindow() {
     resizable: false,
     movable: false,
     show: false,
+    fullscreen: true,
     webPreferences: {
       nodeIntegration: true,
       contextIsolation: false,
     },
   })
 
-  overlayWindow.setAlwaysOnTop(true, 'screen-saver')
-  overlayWindow.setIgnoreMouseEvents(true)
-  overlayWindow.setVisibleOnAllWorkspaces(true)
-
+  // Ensure it covers the full display (including taskbar area) and stays above it.
+  overlayWindow.setBounds(primaryDisplay.bounds)
+  overlayWindow.setFullScreen(true)
+  overlayWindow.setAlwaysOnTop(true, 'screen-saver', 1)
+  overlayWindow.setIgnoreMouseEvents(true, { forward: true })
+  overlayWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
   const overlayPath = isDev
     ? path.join(__dirname, '..', 'electron', 'overlay.html')
     : path.join(__dirname, 'overlay.html')
   overlayWindow.loadFile(overlayPath)
 
+  // Keep the overlay pinned to the full screen if display metrics change
+  // (e.g. DPI change, taskbar moved, resolution change).
+  const resyncBounds = () => {
+    if (!overlayWindow) return
+    const d = screen.getPrimaryDisplay()
+    overlayWindow.setBounds(d.bounds)
+  }
+  screen.on('display-metrics-changed', resyncBounds)
+  screen.on('display-added', resyncBounds)
+  screen.on('display-removed', resyncBounds)
+
   overlayWindow.on('closed', () => {
+    screen.removeListener('display-metrics-changed', resyncBounds)
+    screen.removeListener('display-added', resyncBounds)
+    screen.removeListener('display-removed', resyncBounds)
     overlayWindow = null
   })
 }
@@ -96,7 +113,8 @@ function showScreenGlow(duration: number = GLOW_DURATION_MS) {
   if (!overlayWindow) createOverlayWindow()
   if (!overlayWindow) return
 
-  overlayWindow.show()
+  // Don't steal focus from the main window.
+  overlayWindow.showInactive()
   overlayWindow.webContents.send('show-glow', { duration })
 
   setTimeout(() => {
@@ -329,6 +347,70 @@ ipcMain.on('close-window', () => {
 })
 
 // ── IPC: Wake Word Controls ─────────────────────────────────────────
+
+let currentWakeHotkey = 'CommandOrControl+Shift+A'
+let currentWakeMode = 'both'
+
+function registerWakeHotkey() {
+  if (!currentWakeHotkey) return
+  if (currentWakeMode === 'hotkey' || currentWakeMode === 'both') {
+    try {
+      globalShortcut.register(currentWakeHotkey, () => {
+        console.log('[main] ★ Wake hotkey pressed! Notifying renderer...')
+        mainWindow?.webContents.send('wake-word-detected', {
+          transcript: 'ayo (hotkey)',
+          timestamp: Date.now(),
+        })
+        showScreenGlow()
+      })
+    } catch (err) {
+      console.error('[main] Failed to register wake hotkey:', err)
+    }
+  }
+}
+
+ipcMain.handle('set-wake-hotkey', (_event, mode: string, hotkey: string) => {
+  if (currentWakeHotkey) {
+    try { globalShortcut.unregister(currentWakeHotkey) } catch {}
+  }
+  currentWakeMode = mode
+  currentWakeHotkey = hotkey
+  registerWakeHotkey()
+  
+  if (mode === 'voice' || mode === 'both') {
+    startWakeWord()
+  } else if (mode === 'hotkey') {
+    stopWakeWord()
+  }
+  
+  return true
+})
+
+let currentPttEnabled = false
+let currentPttHotkey = 'CommandOrControl+Space'
+
+function registerPttHotkey() {
+  if (!currentPttHotkey || !currentPttEnabled) return
+  try {
+    globalShortcut.register(currentPttHotkey, () => {
+      console.log('[main] ★ PTT hotkey pressed! Notifying renderer...')
+      mainWindow?.webContents.send('push-to-talk-pressed')
+      showScreenGlow()
+    })
+  } catch (err) {
+    console.error('[main] Failed to register PTT hotkey:', err)
+  }
+}
+
+ipcMain.handle('set-ptt-hotkey', (_event, enabled: boolean, hotkey: string) => {
+  if (currentPttHotkey) {
+    try { globalShortcut.unregister(currentPttHotkey) } catch {}
+  }
+  currentPttEnabled = enabled
+  currentPttHotkey = hotkey
+  registerPttHotkey()
+  return true
+})
 
 ipcMain.handle('wake-word-start', () => {
   startWakeWord()

@@ -225,15 +225,14 @@ export default function Dashboard() {
         {/* Privacy Mode */}
         <motion.div
           whileHover={{ y: -2 }}
-          onClick={togglePrivacyMode}
           className={cn(
-            "p-5 rounded-2xl border cursor-pointer transition-all duration-300",
+            "p-5 rounded-2xl border transition-all duration-300",
             privacyMode 
               ? "bg-ayo-purple/10 border-ayo-purple/40" 
               : "glass-card"
           )}
         >
-          <div className="flex items-start justify-between mb-4">
+          <div className="flex items-center justify-between mb-4 h-10">
             <div className={cn(
               "icon-box",
               privacyMode ? "bg-ayo-purple/20 border-ayo-purple/30" : ""
@@ -256,15 +255,14 @@ export default function Dashboard() {
         {/* Camera */}
         <motion.div
           whileHover={{ y: -2 }}
-          onClick={toggleCamera}
           className={cn(
-            "p-5 rounded-2xl border cursor-pointer transition-all duration-300",
+            "p-5 rounded-2xl border transition-all duration-300",
             cameraEnabled && !privacyMode
               ? "bg-ayo-purple/10 border-ayo-purple/40" 
               : "glass-card"
           )}
         >
-          <div className="flex items-start justify-between mb-4">
+          <div className="flex items-center justify-between mb-4 h-10">
             <div className={cn(
               "icon-box",
               cameraEnabled && !privacyMode ? "bg-ayo-purple/20 border-ayo-purple/30" : ""
@@ -292,15 +290,14 @@ export default function Dashboard() {
         {/* Context Capture */}
         <motion.div
           whileHover={{ y: -2 }}
-          onClick={toggleContextCapture}
           className={cn(
-            "p-5 rounded-2xl border cursor-pointer transition-all duration-300",
+            "p-5 rounded-2xl border transition-all duration-300",
             contextCaptureEnabled && !privacyMode
               ? "bg-ayo-purple/10 border-ayo-purple/40" 
               : "glass-card"
           )}
         >
-          <div className="flex items-start justify-between mb-4">
+          <div className="flex items-center justify-between mb-4 h-10">
             <div className={cn(
               "icon-box",
               contextCaptureEnabled && !privacyMode ? "bg-ayo-purple/20 border-ayo-purple/30" : ""

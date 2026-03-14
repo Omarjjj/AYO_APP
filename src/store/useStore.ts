@@ -1,6 +1,10 @@
 import { create } from 'zustand'
 
 const SELECTED_INPUT_DEVICE_KEY = 'ayo-selectedInputDevice'
+const WAKE_MODE_KEY = 'ayo-wakeMode'
+const WAKE_HOTKEY_KEY = 'ayo-wakeHotkey'
+const PTT_ENABLED_KEY = 'ayo-pttEnabled'
+const PTT_HOTKEY_KEY = 'ayo-pttHotkey'
 
 function getStoredInputDevice(): number | null {
   if (typeof localStorage === 'undefined') return null
@@ -20,6 +24,39 @@ function setStoredInputDevice(value: number | null) {
     if (value == null) localStorage.removeItem(SELECTED_INPUT_DEVICE_KEY)
     else localStorage.setItem(SELECTED_INPUT_DEVICE_KEY, String(value))
   } catch { /* ignore */ }
+}
+
+function getStoredWakeMode(): 'voice' | 'hotkey' | 'both' {
+  if (typeof localStorage === 'undefined') return 'both'
+  try {
+    const s = localStorage.getItem(WAKE_MODE_KEY)
+    if (s === 'voice' || s === 'hotkey' || s === 'both') return s
+  } catch { /* ignore */ }
+  return 'both'
+}
+
+function getStoredWakeHotkey(): string {
+  if (typeof localStorage === 'undefined') return 'CommandOrControl+Shift+A'
+  try {
+    return localStorage.getItem(WAKE_HOTKEY_KEY) || 'CommandOrControl+Shift+A'
+  } catch { /* ignore */ }
+  return 'CommandOrControl+Shift+A'
+}
+
+function getStoredPttEnabled(): boolean {
+  if (typeof localStorage === 'undefined') return false
+  try {
+    return localStorage.getItem(PTT_ENABLED_KEY) === 'true'
+  } catch { /* ignore */ }
+  return false
+}
+
+function getStoredPttHotkey(): string {
+  if (typeof localStorage === 'undefined') return 'CommandOrControl+Space'
+  try {
+    return localStorage.getItem(PTT_HOTKEY_KEY) || 'CommandOrControl+Space'
+  } catch { /* ignore */ }
+  return 'CommandOrControl+Space'
 }
 
 export type AssistantStatus = 'idle' | 'listening' | 'processing' | 'responding'
@@ -63,6 +100,10 @@ export interface Settings {
   dataRetention: boolean
   selectedInputDevice: number | null
   selectedOutputDevice: string | null
+  wakeMode: 'voice' | 'hotkey' | 'both'
+  wakeHotkey: string
+  enablePushToTalk: boolean
+  pushToTalkHotkey: string
   hotkeys: {
     privacyMode: string
     cameraToggle: string
@@ -165,6 +206,10 @@ export const useStore = create<AppState>((set) => ({
     dataRetention: false,
     selectedInputDevice: getStoredInputDevice(),
     selectedOutputDevice: null,
+    wakeMode: getStoredWakeMode(),
+    wakeHotkey: getStoredWakeHotkey(),
+    enablePushToTalk: getStoredPttEnabled(),
+    pushToTalkHotkey: getStoredPttHotkey(),
     hotkeys: {
       privacyMode: 'Ctrl+Shift+P',
       cameraToggle: 'Ctrl+Shift+C',
@@ -258,6 +303,18 @@ export const useStore = create<AppState>((set) => ({
   updateSettings: (newSettings) => set((state) => {
     if (newSettings.selectedInputDevice !== undefined) {
       setStoredInputDevice(newSettings.selectedInputDevice)
+    }
+    if (newSettings.wakeMode !== undefined) {
+      try { localStorage.setItem(WAKE_MODE_KEY, newSettings.wakeMode) } catch {}
+    }
+    if (newSettings.wakeHotkey !== undefined) {
+      try { localStorage.setItem(WAKE_HOTKEY_KEY, newSettings.wakeHotkey) } catch {}
+    }
+    if (newSettings.enablePushToTalk !== undefined) {
+      try { localStorage.setItem(PTT_ENABLED_KEY, String(newSettings.enablePushToTalk)) } catch {}
+    }
+    if (newSettings.pushToTalkHotkey !== undefined) {
+      try { localStorage.setItem(PTT_HOTKEY_KEY, newSettings.pushToTalkHotkey) } catch {}
     }
     return { settings: { ...state.settings, ...newSettings } }
   }),
